@@ -248,6 +248,8 @@ class _ConsumerThread(Thread):
 
                 for message in self.consumer:
                     if message is not None:
+                        if message.queue_name is None:
+                            message.update_attributes(queue_name=self.queue_name)
                         self.handle_message(message)
 
                     elif self.paused:

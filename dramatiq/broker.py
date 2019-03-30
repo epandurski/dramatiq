@@ -325,6 +325,9 @@ class MessageProxy:
         """
         self.failed = True
 
+    def update_attributes(self, **attributes):
+        self._message = self._message.copy(**attributes)
+
     def __getattr__(self, name):
         return getattr(self._message, name)
 
