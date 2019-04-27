@@ -16,12 +16,42 @@ Added
   of messages to prefetch per worker thread.  (`#183`_, `#184`_, `@xelhark`_)
 * The RabbitMQ broker now retries the queue declaration process if an
   error occurs.  (`#179`_, `@davidt99`_)
+* Support for accessing nested broker instances from the CLI.
+  (`#191`_, `@bersace`_)
+* Support for eagerly raising actor exceptions in the joining thread
+  with the |StubBroker|.  (`#195`_, `#203`_)
+* Support for accessing the current message from an actor via
+  |CurrentMessage|.  (`#208`_)
 
 .. _#179: https://github.com/Bogdanp/dramatiq/issues/179
 .. _#183: https://github.com/Bogdanp/dramatiq/issues/183
 .. _#184: https://github.com/Bogdanp/dramatiq/issues/184
+.. _#191: https://github.com/Bogdanp/dramatiq/pull/191
+.. _#195: https://github.com/Bogdanp/dramatiq/issues/195
+.. _#203: https://github.com/Bogdanp/dramatiq/pull/203
+.. _#208: https://github.com/Bogdanp/dramatiq/issues/208
+.. _@bersace: https://github.com/bersace
 .. _@davidt99: https://github.com/davidt99
 .. _@xelhark: https://github.com/xelhark
+
+Changed
+^^^^^^^
+
+* Pinned pika version `>1.0,<2.0`.  (`#202`_)
+
+.. _#202: https://github.com/Bogdanp/dramatiq/pull/202
+
+Fixed
+^^^^^
+
+* An issue where workers would fail and never recover after the
+  connection to Redis was severed.  (`#207`_)
+* ``pipe_ignore`` has been fixed to apply to the next message in line
+  within a pipeline.  (`#194`_, `@metheoryt`_)
+
+.. _#194: https://github.com/Bogdanp/dramatiq/pull/194
+.. _#207: https://github.com/Bogdanp/dramatiq/issues/207
+.. _@metheoryt: https://github.com/metheoryt
 
 
 `1.5.0`_ -- 2019-02-18

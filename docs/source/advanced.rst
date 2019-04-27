@@ -34,6 +34,31 @@ The |RedisBroker| takes a ``namespace`` parameter that you can use to
 logically split queues across multiple apps.
 
 
+Highly Available Queues
+^^^^^^^^^^^^^^^^^^^^^^^
+
+RabbitMQ
+~~~~~~~~
+
+When running RabbitMQ with a `high availability cluster`_, you can
+pass a sequence of pika `connection parameters`_ to |RabbitmqBroker|
+when instantiating it.  This will make dramatiq failover if the
+currently connected node fails.
+
+.. code-block:: python
+
+   from dramatiq.brokers.rabbitmq import RabbitmqBroker
+
+
+   rabbitmq_broker = RabbitmqBroker(parameters=[
+       dict(host='node1.foo.net'),
+       dict(host='node2.foo.net'),
+   ])
+
+.. _high availability cluster: https://www.rabbitmq.com/ha.html
+.. _connection parameters: https://pika.readthedocs.io/en/0.12.0/modules/parameters.html
+
+
 Other brokers
 ^^^^^^^^^^^^^
 
@@ -66,6 +91,7 @@ hardware, power or network failure) then the messages it pulled from
 the broker will eventually be re-delivered to it (assuming it
 recovers) or another worker.
 
+
 Message Results
 ^^^^^^^^^^^^^^^
 
@@ -75,6 +101,7 @@ without needing this capability so the middleware is not turned on by
 default.  When you do need it, however, it's there.
 
 .. _message-interrupts:
+
 
 Message Interrupts
 ^^^^^^^^^^^^^^^^^^
@@ -113,6 +140,27 @@ the message, raise an exception to indicate failure.
            raise
 
 
+Accessing Messages from Within Actors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Actors can access their own messages via the |CurrentMessage|
+middleware.  This middleware is not enabled by default, but you can
+add it to your broker when you instantiate it or by calling
+|add_middleware|::
+
+  from dramatiq.middleware import CurrentMessage
+
+
+  broker.add_middleware(CurrentMessage())
+
+With this middleware in place, every actor can access its own message
+by calling |get_current_message| on the |CurrentMessage| class::
+
+  @dramatiq.actor
+  def example():
+      print(CurrentMessage.get_current_message())
+
+
 Enqueueing Messages from Other Languages
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -131,7 +179,6 @@ dictionary containing the following fields to your queue:
      "message_id": "unique-id",   // A UUID4 value representing the message's unique id in the system
      "message_timestamp": 0,      // The UNIX timestamp in milliseconds representing when the message was first enqueued
    }
-
 
 Using RabbitMQ
 ~~~~~~~~~~~~~~
@@ -167,6 +214,7 @@ Code   Description
 ``4``  Returned when a PID file is set and Dramatiq is already running.
 =====  ========================================================================================
 
+
 Controlling Workers
 ^^^^^^^^^^^^^^^^^^^
 
@@ -193,6 +241,7 @@ Sending ``HUP`` to the main process triggers a graceful shutdown
 followed by a reload of the workers.  This is useful if you want to
 reload code without completely restarting the main process.
 
+
 Using gevent
 ^^^^^^^^^^^^
 
@@ -209,6 +258,7 @@ gevent could provide a significant performance improvement.
 
 I suggest at least experimenting with it to see if it fits your use
 case.
+
 
 Prometheus Metrics
 ^^^^^^^^^^^^^^^^^^

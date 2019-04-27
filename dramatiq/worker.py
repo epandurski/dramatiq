@@ -32,6 +32,10 @@ from .middleware import Middleware, SkipMessage
 CONSUMER_RESTART_DELAY = int(os.getenv("dramatiq_restart_delay", 3000))
 CONSUMER_RESTART_DELAY_SECS = CONSUMER_RESTART_DELAY / 1000
 
+#: The number of seconds to wait before retrying post_process_message
+#: calls after a connection error.
+POST_PROCESS_MESSAGE_RETRY_DELAY_SECS = 5
+
 #: The number of messages to prefetch from the queue for each worker
 QUEUE_PREFETCH = int(os.getenv("dramatiq_queue_prefetch", 0))
 
@@ -325,17 +329,50 @@ class _ConsumerThread(Thread):
         individual messages, signaling that each message is ready to
         be acked or rejected.
         """
-        if message.failed:
-            self.logger.debug("Rejecting message %r.", message.message_id)
-            self.broker.emit_before("nack", message)
-            self.consumer.nack(message)
-            self.broker.emit_after("nack", message)
+        while True:
+            try:
+                if message.failed:
+                    self.logger.debug("Rejecting message %r.", message.message_id)
+                    self.broker.emit_before("nack", message)
+                    self.consumer.nack(message)
+                    self.broker.emit_after("nack", message)
 
-        else:
-            self.logger.debug("Acknowledging message %r.", message.message_id)
-            self.broker.emit_before("ack", message)
-            self.consumer.ack(message)
-            self.broker.emit_after("ack", message)
+                else:
+                    self.logger.debug("Acknowledging message %r.", message.message_id)
+                    self.broker.emit_before("ack", message)
+                    self.consumer.ack(message)
+                    self.broker.emit_after("ack", message)
+
+                return
+
+            # This applies to the Redis broker.  The alternative to
+            # constantly retrying would be to give up here and let the
+            # message be re-processed after the worker is eventually
+            # stopped or restarted, but we'd be doing the same work
+            # twice in that case and the behaviour would surprise
+            # users who don't deploy frequently.
+            except ConnectionError as e:
+                self.logger.warning(
+                    "Failed to post_process_message(%s) due to a connection error: %s\n"
+                    "The operation will be retried in %s seconds until the connection recovers.\n"
+                    "If you restart this worker before this operation succeeds, the message will be re-processed later.",
+                    message, e, POST_PROCESS_MESSAGE_RETRY_DELAY_SECS
+                )
+
+                time.sleep(POST_PROCESS_MESSAGE_RETRY_DELAY_SECS)
+                continue
+
+            # Not much point retrying here so we bail.  Most likely,
+            # the message will be re-run after the worker is stopped
+            # or restarted (because its ack lease will have expired).
+            except Exception:  # pragma: no cover
+                self.logger.exception(
+                    "Unhandled error during post_process_message(%s).  You've found a bug in Dramatiq.  Please report it!\n"
+                    "Although your message has been processed, it will be processed again once this worker is restarted.",
+                    message,
+                )
+
+                return
 
     def requeue_messages(self, messages):
         """Called on worker shutdown and whenever there is a
@@ -441,6 +478,11 @@ class _WorkerThread(Thread):
             self.broker.emit_after("skip_message", message)
 
         except BaseException as e:
+            # Stuff the exception into the message [proxy] so that it
+            # may be used by the stub broker to provide a nicer
+            # testing experience.
+            message.stuff_exception(e)
+
             if isinstance(e, RateLimitExceeded):
                 self.logger.warning("Rate limit exceeded in message %s: %s.", message, e)
             else:
